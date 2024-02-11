@@ -63,10 +63,10 @@
       <input type="range" id="slider_gravity" min="0" max="30" value="9.81" step="0.1">
       <br>
       <label for="slider_size">Max size:</label>
-      <input type="range" id="slider_size" min="2" max="50" value="9.81" step="0.1">
+      <input type="range" id="slider_size" min="1" max="50" value="9.81" step="0.1">
       <br/>
       <label for="fans">Fans</label>
-      <input type="range" id="fans_speed" min="0" max="10" value="2" step="1">
+      <input type="range" id="fans_speed" min="0" max="100" value="2" step="1">
       <br/>
       <label for="elasticity">Elasticity</label>
       <input type="range" id="elasticity" min="0" max="2" value="0.98" step="0.01">
@@ -86,8 +86,8 @@
       fans_speed = 2;
       nb_balls = 3000;//800; // 10FPS
       max_init_speed = 100;
-      sub_iters = 8;
-      radius_min_max = [ 4,4 ];
+      sub_iters = 10;
+      radius_min_max = [ 4,8 ];
 
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
@@ -178,7 +178,12 @@
           // Draw ball
               ctx.beginPath();
               ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-              ctx.fillStyle = '#'+toHex(Math.floor((ball.speed/max_speed) * 255))+'8888';//ball.color;
+	      let val = 0;
+	      val = Math.floor((ball.speed/max_speed) * 255);      // Speed
+	      val = Math.floor(((ball.radius) / max_radius)*255);  // Size
+	      val = Math.floor((ball.id/nb_balls)*255);            // ID
+	      val = (ball.seen_collisions > 0 )?255:0;              // Collision
+              ctx.fillStyle = '#'+toHex(val)+'AAAA';//ball.color;
 	      //ctx.fillStyle = "#008888";
               ctx.fill();
               ctx.closePath();
@@ -199,11 +204,11 @@
 
       fps = 0;
       let solver_iters = 0;
-      
+
       function mini_update(dt) {
 	  let colls = 0;
 	  let t1 = new Date().getTime();
-	  sort_balls2();
+	  //
 	  let t2 = new Date().getTime();
 	  //alert ((t2-t1) / 100);
 	  balls.forEach( ball =>  {
@@ -229,10 +234,13 @@
 	      if (ball.speed > max_speed) 
 		  max_speed = ball.speed;
 	      total_energy += ball.speed**2 * ball.mass;
+	      if (! ball.speed > 0)
+		  console.log (ball.speed);
 	      avg_collision_computes += ball.computed_collisions;
 	  });
-	  
+
 	  avg_collision_computes = Math.floor(avg_collision_computes/nb_balls);
+	  sort_balls2();
       }
       
       function sort_balls2() {

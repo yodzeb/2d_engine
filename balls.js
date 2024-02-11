@@ -15,12 +15,13 @@ class ball {
 	this.x = x;
 	this.y = y;
 	this.radius = radius;
-	this.mass = Math.PI * radius ** 2;
+	this.mass = Math.PI * this.radius ** 2;
 	this.color = '#3498db';
 	this.velocity = {
 	    x: vx,
 	    y: vy
 	};
+	this.speed = Math.sqrt(this.velocity.x**2 + this.velocity.y**2);
     };
 
     collide_wall() {
@@ -64,8 +65,8 @@ class ball {
 	this.seen_collisions = 0;
 	let discrete_x = Math.floor(this.x / (2*max_radius));
 	let discrete_y = Math.floor(this.y / (2*max_radius));
-	let end_x = Math.min(discrete_x+1, balls_discrete.length);
-	let end_y = Math.min(discrete_y+1, balls_discrete[0].length);
+	let end_x = Math.min(discrete_x+2, balls_discrete.length);
+	let end_y = Math.min(discrete_y+2, balls_discrete[0].length);
 	
 	for (let start_x = Math.max(0,discrete_x-1); start_x < end_x; start_x++) {
 	    for (let start_y = Math.max(0,discrete_y-1); start_y < end_y ; start_y++) {
@@ -84,19 +85,19 @@ class ball {
 	let m_margin = 10;
 	// NE
 	if (this.x > (canvas.width/2 +m_margin) && this.y < (canvas.height/2 - m_margin)) {
-	    this.velocity.x -= accell*dt;
+	    this.velocity.x -= 8*accell*dt / this.mass;
 	}
 	// NW
 	if (this.x < (canvas.width/2 -m_margin) && this.y < (canvas.height/2 -m_margin)) {
-	    this.velocity.y += accell*dt;
+	    this.velocity.y += 8*accell*dt / this.mass;
 	}
 	// SW
 	if (this.x < (canvas.width/2 -m_margin) && this.y > (canvas.height/2 + m_margin )) {
-	    this.velocity.x += accell*dt;
+	    this.velocity.x += 8*accell*dt / this.mass;
 	}
 	// SE
 	if (this.x > (canvas.width/2+ m_margin) && this.y > (canvas.height/2 + m_margin)) {
-	    this.velocity.y -= accell*dt;
+	    this.velocity.y -= 8*accell*dt / this.mass;
 	}
 
     }
