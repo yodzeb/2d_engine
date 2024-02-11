@@ -79,15 +79,15 @@
     <script>
       const canvas = document.getElementById('physicsCanvas');
       const ctx = canvas.getContext('2d');
-      let gravity = 0.2;9.81;
+      let gravity = 0;9.81;
       let loss = 0.98;
       balls = [];
       obstacles = [];
       fans_speed = 2;
-      nb_balls = 50;//800; // 10FPS
+      nb_balls = 3000;//800; // 10FPS
       max_init_speed = 100;
       sub_iters = 8;
-      radius_min_max = [ 2,4 ];
+      radius_min_max = [ 4,4 ];
 
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
@@ -111,7 +111,6 @@
       document.getElementById('slider_balls').addEventListener('input', function(event) {
             // Get the current value of the slider
           const sliderValue = parseInt(event.target.value);
-
 	  if (sliderValue > nb_balls) {
 	      for (i=nb_balls; i<sliderValue; i++) {
 		  //balls.push(new ball(i, Math.random() * canvas.width, Math.random() * canvas.height, rad,  vx, vy));
@@ -124,12 +123,7 @@
 	      }
 	  }
 	  nb_balls = sliderValue;
-
-            // Update the displayed value
-            document.getElementById('sliderValue').innerText = `Slider Value: ${sliderValue}`;
-
-            // Call your JavaScript function with the slider value
-            yourFunction(sliderValue);
+	  update_max_radius();
         });
 
       class LineSegment {
@@ -188,6 +182,8 @@
 	      //ctx.fillStyle = "#008888";
               ctx.fill();
               ctx.closePath();
+	  });
+	  /*
 	      //return; 
 	      ctx.fillStyle = '#ffffff'; // White text color
               ctx.font = '12px Arial'; // Adjust font size and style as needed
@@ -195,7 +191,8 @@
               ctx.textBaseline = 'middle';
 	      ctx.fillText(i, ball.x, ball.y);
 	      i++;
-	  })
+	      })
+	      */
       }
 
       saved_time = undefined;
@@ -203,64 +200,86 @@
       fps = 0;
       let solver_iters = 0;
       
-      function mini_update(dt, balls_x_sorted, balls_x_sorted_indexes) {
+      function mini_update(dt) {
 	  let colls = 0;
+	  let t1 = new Date().getTime();
+	  sort_balls2();
+	  let t2 = new Date().getTime();
+	  //alert ((t2-t1) / 100);
 	  balls.forEach( ball =>  {
-	      colls += ball.update(dt, balls_x_sorted, balls_x_sorted_indexes);
-	      //coll1 = ball.collide_others(balls_x_sorted, balls_x_sorted_indexes);
-	      //console.log("1st:"+coll1);
-	      //coll2 = ball.collide_others(balls_x_sorted, balls_x_sorted_indexes);
-	      //console.log("2nd:"+coll2);
+	      colls += ball.update(dt, balls_discrete);
 	  });
 	  return colls;
       }
 
-      let balls_x_sorted_indexes = [];
-      let balls_x_sorted = [];
       let max_speed = 0;
       let max_radius = 0;
       let avg_collision_computes = 0;
-      
-      function sort_balls() {
-	  max_speed = 0;
+      let balls_discrete = [];
+
+      function update_max_radius () {
 	  max_radius = 0;
+	  total_energy = 0;
+	  max_speed = 0;
 	  avg_collision_computes = 0;
-	  balls_x_sorted_indexes = [];
-	  balls_x_sorted = [];
-	  balls_x_sorted = balls.slice().sort((a,b) => {return a.x - b.x});
-	  balls_x_sorted_indexes = Array(nb_balls);
 	  
-	  balls_x_sorted.forEach(function (ball,i) {
-	      if (ball.speed > max_speed)
-		  max_speed = ball.speed;
+	  balls.forEach ( ball => {
 	      if (ball.radius > max_radius)
 		  max_radius = ball.radius;
+	      if (ball.speed > max_speed) 
+		  max_speed = ball.speed;
+	      total_energy += ball.speed**2 * ball.mass;
 	      avg_collision_computes += ball.computed_collisions;
-	      balls_x_sorted_indexes[ball.id] = i;
 	  });
-	  avg_collision_computes = Math.floor(avg_collision_computes/nb_balls)
+	  
+	  avg_collision_computes = Math.floor(avg_collision_computes/nb_balls);
+      }
+      
+      function sort_balls2() {
+	  if (nb_balls == 0 || balls.length == 0)
+	      return;
+	  let diameter = 2*max_radius;
+	  let x_size = Math.ceil(canvas.width / diameter);
+	  let y_size = Math.ceil(canvas.height / diameter);
+	  balls_discrete = Array(x_size);
+	  for (let bb = 0; bb < x_size; bb++) {
+	      balls_discrete[bb] = Array(y_size);
+	      for (let cc = 0; cc < y_size; cc++) {
+		  balls_discrete[bb][cc] = Array();
+	      }
+	  }
+	  balls.forEach(ball => {
+	      let discrete_x = Math.floor(ball.x / diameter);
+	      let discrete_y = Math.floor(ball.y / diameter);
+
+	      if (discrete_x < x_size && discrete_y < y_size &&  balls_discrete[discrete_x]&&  balls_discrete[discrete_x][discrete_y]){
+		  balls_discrete[discrete_x][discrete_y].push(ball);
+	      }
+	  });
+	  
       }
 
       let collision_detected = 0;
+      let total_energy = 0;
       
       function update_world() {
 	  collision_detected = 0;
-	  sort_balls();
+	  update_max_radius();
+	  
 	  const currentTimeMillis = new Date().getTime();
 	  ii = sub_iters;
-	  
 	  if (!saved_time)
 	      saved_time = currentTimeMillis
 	  dt = (currentTimeMillis-saved_time)/100;
 	  while (ii != 0 ){
-	      collision_detected += mini_update(dt/sub_iters, balls_x_sorted, balls_x_sorted_indexes);
+	      collision_detected += mini_update(dt/sub_iters);
 	      ii -= 1;
 	  }
 	  if (Math.floor(currentTimeMillis/1000) != Math.floor(saved_time/1000)) {
 	      document.getElementById("debug").innerHTML = "Balls: "+nb_balls+" Gravity: "+gravity+"<br>";
 	      document.getElementById("debug").innerHTML += "FPS: "+fps + " (x"+sub_iters+") FT: "+Math.floor(new Date().getTime() - currentTimeMillis)+"ms AvgColC: "+avg_collision_computes+"<br>";
-	      document.getElementById("debug").innerHTML += "CollC: "+avg_collision_computes+ " CollS: "+collision_detected+ " max_s: " + max_speed + "<br>";
-	      document.getElementById("debug").innerHTML += "Loss: "+loss
+	      document.getElementById("debug").innerHTML += "CollC: "+avg_collision_computes+ " CollS: "+collision_detected+ " max_s: " + Math.floor(max_speed) + "<br>";
+	      document.getElementById("debug").innerHTML += "Loss: "+loss+ " Energy: "+Math.floor(total_energy);
 	      fps = 0;
 	  }
 	  else {
@@ -273,10 +292,11 @@
       // Start the animation loop
 
       init_balls();
+      update_max_radius();
       update_world();
       update_world();
       update_world();
-      setInterval(update_world);
+      setInterval(update_world, 5);
       //setInterval(shake, 100);
 
       // Resize canvas when the window is resized
@@ -305,7 +325,7 @@
 	  console.log (mouseY);
 	  balls.forEach(ball => {
 	      dist = Math.sqrt((mouseX - ball.x)**2 + (mouseY - ball.y)**2)
-	      let ff = 100;
+	      let ff = 50;
 	      let xf = (ball.x > mouseX)?1:-1;
 	      let yf = (ball.y > mouseY)?1:-1;
 	      ball.velocity.x += 100/dist * ff * xf;

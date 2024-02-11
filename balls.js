@@ -15,6 +15,7 @@ class ball {
 	this.x = x;
 	this.y = y;
 	this.radius = radius;
+	this.mass = Math.PI * radius ** 2;
 	this.color = '#3498db';
 	this.velocity = {
 	    x: vx,
@@ -42,41 +43,44 @@ class ball {
         }
     }
 
-    update(dt, balls_x_sorted, balls_x_sorted_indexes) {
+    update(dt, balls_discrete) {
         // Update ball position based on velocity
 	this.velocity.y += gravity * dt;
         this.x += this.velocity.x  * dt;
         this.y += this.velocity.y  * dt;
 	//this.collide_segments();
 	if (fans_speed > 0)
-	    this.apply_fans(fans_speed);
+	    this.apply_fans(fans_speed, dt);
 	this.speed = Math.sqrt(this.velocity.x**2 + this.velocity.y**2);
-	let colls = this.collide_others(balls_x_sorted, balls_x_sorted_indexes);
+	let colls = this.collide_others_discrete(balls_discrete);
 	this.collide_wall();
 	return colls;
     }
 
-    collide_others(balls_x_sorted, balls_x_sorted_indexes) {
-	let zz=(balls_x_sorted_indexes[this.id])+1;
-	this.computed_collisions = 0
+    collide_others_discrete(balls_discrete) {
+	if (balls_discrete.length == 0)
+	    return;
+	this.computed_collisions = 0;
 	this.seen_collisions = 0;
-
-	while (zz < nb_balls &&
-	       (balls_x_sorted[zz].x - this.x) < (this.radius + max_radius + this.margin)) {
-	    this.seen_collisions += this.collide(balls_x_sorted[zz]);
-	    this.computed_collisions ++;
-	    zz++;
-	}
-	zz=balls_x_sorted_indexes[this.id]-1;
-	while (zz>=0 && (this.x - balls_x_sorted[zz].x) < (this.radius + max_radius + this.margin)) {
-	    this.seen_collisions += this.collide(balls_x_sorted[zz]);
-	    this.computed_collisions ++;
-	    zz--;
+	let discrete_x = Math.floor(this.x / (2*max_radius));
+	let discrete_y = Math.floor(this.y / (2*max_radius));
+	let end_x = Math.min(discrete_x+1, balls_discrete.length);
+	let end_y = Math.min(discrete_y+1, balls_discrete[0].length);
+	
+	for (let start_x = Math.max(0,discrete_x-1); start_x < end_x; start_x++) {
+	    for (let start_y = Math.max(0,discrete_y-1); start_y < end_y ; start_y++) {
+		balls_discrete[start_x][start_y].forEach(ball2 => {
+		    if (ball2.id  != this.id) {
+			this.computed_collisions ++;
+			this.seen_collisions += this.collide(ball2);
+		    }
+		});
+	    }
 	}
 	return this.seen_collisions;
     }
 
-    apply_fans(accell) {
+    apply_fans(accell, dt) {
 	let m_margin = 10;
 	// NE
 	if (this.x > (canvas.width/2 +m_margin) && this.y < (canvas.height/2 - m_margin)) {
@@ -95,10 +99,6 @@ class ball {
 	    this.velocity.y -= accell*dt;
 	}
 
-    }
-
-    mass() {
-	return Math.PI * (this.radius ** 2)
     }
 
     collide(ball2, elasticity = loss) {
@@ -126,51 +126,44 @@ class ball {
             ball2.y -= overlap * moveRatio2 * Math.sin(collisionAngle);
 
             // Calculate masses and final velocities
-            const totalMass = this.mass() + ball2.mass(); // this.radius + ball2.radius;
+            const totalMass = this.mass + ball2.mass; // this.radius + ball2.radius;
             const phi = collisionAngle; // Contact angle
 
-            const v1 = Math.sqrt(this.velocity.x**2 + this.velocity.y**2);
+            const v1 = this.speed; //Math.sqrt(this.velocity.x**2 + this.velocity.y**2);
             const v1Angle = Math.atan2(this.velocity.y, this.velocity.x);
 
-            const v2 = Math.sqrt(ball2.velocity.x**2 + ball2.velocity.y**2);
+            const v2 = ball2.speed; //Math.sqrt(ball2.velocity.x**2 + ball2.velocity.y**2);
             const v2Angle = Math.atan2(ball2.velocity.y, ball2.velocity.x);
 
 	    const pi = Math.PI;
+	    const v1_phi_cos = Math.cos(v1Angle - phi);
+	    const v2_phi_cos = Math.cos(v2Angle - phi);
+	    const v1_phi_sin = Math.sin(v1Angle - phi);
+	    const v2_phi_sin = Math.sin(v2Angle - phi);
+	    
+	    const cos_phi_pi2 = Math.cos(phi + pi/2);
+	    const sin_phi_pi2 = Math.sin(phi + pi/2);
 
+	    const cos_phi = Math.cos(phi);
+	    const sin_phi = Math.sin(phi);
+	    
 	    
 	 // Calculate new velocities
-	    const v1xFinal = ((v1 * Math.cos(v1Angle - phi) * (this.mass() - ball2.mass()) +
-			       2 * ball2.mass() * v2 * Math.cos(v2Angle - phi)) / totalMass)
-                  * Math.cos(phi) + v1 * Math.sin(v1Angle - phi) * Math.cos(phi + pi/2);
+	    const v1xFinal = ((v1 * v1_phi_cos * (this.mass - ball2.mass) +
+			       2 * ball2.mass * v2 * v2_phi_cos ) / totalMass)
+                  * cos_phi + v1 * v1_phi_sin * cos_phi_pi2;
 	    
-	    const v1yFinal = ((v1 * Math.cos(v1Angle - phi) * (this.mass() - ball2.mass()) +
-			       2 * ball2.mass() * v2 * Math.cos(v2Angle - phi)) / totalMass)
-                  * Math.sin(phi) + v1 * Math.sin(v1Angle - phi) * Math.sin(phi + pi/2);
+	    const v1yFinal = ((v1 * v1_phi_cos * (this.mass - ball2.mass) +
+			       2 * ball2.mass * v2 * v2_phi_cos) / totalMass)
+                  * sin_phi + v1 * v1_phi_sin * sin_phi_pi2;
 	    
-	    const v2xFinal = ((v2 * Math.cos(v2Angle - phi) * (ball2.mass() - this.mass()) +
-			       2 * this.mass() * v1 * Math.cos(v1Angle - phi)) / totalMass)
-                  * Math.cos(phi) + v2 * Math.sin(v2Angle - phi) * Math.cos(phi + pi/2);
+	    const v2xFinal = ((v2 * v2_phi_cos * (ball2.mass - this.mass) +
+			       2 * this.mass * v1 * v1_phi_cos ) / totalMass)
+                  * cos_phi + v2 * v2_phi_sin * cos_phi_pi2;
 	    
-	    const v2yFinal = ((v2 * Math.cos(v2Angle - phi) * (ball2.mass() - this.mass()) +
-			       2 * this.mass() * v1 * Math.cos(v1Angle - phi)) / totalMass)
-		  * Math.sin(phi) + v2 * Math.sin(v2Angle - phi) * Math.sin(phi + pi/2);
-
-	 // // Calculate new velocities
-	 //    const v1xFinal = ((v1 * Math.cos(v1Angle - phi) * (this.radius - ball2.radius) +
-	 // 		       2 * ball2.radius * v2 * Math.cos(v2Angle - phi)) / totalMass)
-         //          * Math.cos(phi) + v1 * Math.sin(v1Angle - phi) * Math.cos(phi + pi/2);
-	    
-	 //    const v1yFinal = ((v1 * Math.cos(v1Angle - phi) * (this.radius - ball2.radius) +
-	 // 		       2 * ball2.radius * v2 * Math.cos(v2Angle - phi)) / totalMass)
-         //          * Math.sin(phi) + v1 * Math.sin(v1Angle - phi) * Math.sin(phi + pi/2);
-	    
-	 //    const v2xFinal = ((v2 * Math.cos(v2Angle - phi) * (ball2.radius - this.radius) +
-	 // 		       2 * this.radius * v1 * Math.cos(v1Angle - phi)) / totalMass)
-         //          * Math.cos(phi) + v2 * Math.sin(v2Angle - phi) * Math.cos(phi + pi/2);
-	    
-	 //    const v2yFinal = ((v2 * Math.cos(v2Angle - phi) * (ball2.radius - this.radius) +
-	 // 		       2 * this.radius * v1 * Math.cos(v1Angle - phi)) / totalMass)
-	 // 	  * Math.sin(phi) + v2 * Math.sin(v2Angle - phi) * Math.sin(phi + pi/2);
+	    const v2yFinal = ((v2 * v2_phi_cos * (ball2.mass - this.mass) +
+			       2 * this.mass * v1 * v1_phi_cos ) / totalMass)
+		  * sin_phi + v2 * v2_phi_sin * sin_phi_pi2;
 
             // Update velocities with elasticity
             this.velocity.x = v1xFinal * elasticity;
