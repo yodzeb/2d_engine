@@ -1,0 +1,270 @@
+const canvas = document.getElementById('physicsCanvas');
+const ctx = canvas.getContext('2d');
+let gravity = 0;9.81;
+let loss = 0.98;
+balls = [];
+obstacles = [];
+fans_speed = 0;
+nb_balls = 50;//800; // 10FPS
+max_init_speed = 100;
+sub_iters = 10;
+radius_min_max = [ 2,4 ];
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+document.getElementById('elasticity').addEventListener('input', function(event) {
+    loss = parseFloat(event.target.value);
+});
+
+document.getElementById('fans_speed').addEventListener('input', function(event) {
+    fans_speed = parseInt(event.target.value);
+});
+
+document.getElementById('slider_size').addEventListener('input', function(event) {
+    radius_min_max[1] = parseInt(event.target.value);
+});
+
+document.getElementById('slider_gravity').addEventListener('input', function(event) {
+    gravity = parseFloat(event.target.value);
+});
+
+document.getElementById('slider_balls').addEventListener('input', function(event) {
+    // Get the current value of the slider
+    const sliderValue = parseInt(event.target.value);
+    if (sliderValue > nb_balls) {
+	for (i=nb_balls; i<sliderValue; i++) {
+	    //balls.push(new ball(i, Math.random() * canvas.width, Math.random() * canvas.height, rad,  vx, vy));
+	    balls.push(ball.get_random(i));
+	}
+    }
+    else if (sliderValue < nb_balls) {
+	for (i=sliderValue; i<nb_balls; i++) {
+	    balls.pop();
+	}
+    }
+    nb_balls = sliderValue;
+    update_max_radius();
+});
+
+class LineSegment {
+    constructor(x1, y1, x2, y2) {
+        this.start = { x: x1, y: y1 };
+        this.end = { x: x2, y: y2 };
+    }
+}
+
+function init_balls() {
+    //balls.push(new ball(100, 200, 40,  50, 50));
+    //balls.push(new ball(400, 400, 40, -50, -50));
+    //return ;
+    for (i=0; i<nb_balls; i++) {
+	vx = (Math.random()-0.5) * max_init_speed;
+	vy = (Math.random()-0.5) * max_init_speed;
+	rad = Math.random() * (radius_min_max[1]-radius_min_max[0]) + radius_min_max[0];
+	balls.push(ball.get_random(i));
+    }
+    obstacles = [
+	//new LineSegment(100, 100, 800, 800),
+	new LineSegment(canvas.width/2, 300, canvas.width/2+300, 100),
+	new LineSegment(canvas.width/2, 300, canvas.width/2-300, 100),
+	new LineSegment(canvas.width/2-150, 500, canvas.width/2+150, 500),
+	
+	// new LineSegment(200, 100, 200, 200),
+	// new LineSegment(200, 200, 100, 200),
+	// new LineSegment(100, 200, 100, 100)
+    ];
+    console.log(balls);
+}
+
+function toHex(d) {
+    return  ("0"+(Number(d).toString(16))).slice(-2).toUpperCase()
+}
+
+function draw() {
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    let i=0;
+    /*
+      obstacles.forEach(obstacle => {
+      ctx.beginPath();
+      ctx.moveTo(obstacle.start.x, obstacle.start.y);
+      ctx.lineTo(obstacle.end.x, obstacle.end.y);
+      ctx.strokeStyle = '#e74c3c';
+      ctx.stroke();
+      ctx.closePath();
+      });
+    */
+    balls.forEach(ball => {
+        // Draw ball
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+	let val = 0;
+	val = Math.floor((ball.speed/max_speed) * 255);      // Speed
+	val = Math.floor(((ball.radius) / max_radius)*255);  // Size
+	val = Math.floor((ball.id/nb_balls)*255);            // ID
+	val = (ball.seen_collisions > 0 )?255:0;              // Collision
+        ctx.fillStyle = '#'+toHex(val)+'AAAA';//ball.color;
+	//ctx.fillStyle = "#008888";
+        ctx.fill();
+        ctx.closePath();
+    });
+    /*
+    //return; 
+    ctx.fillStyle = '#ffffff'; // White text color
+    ctx.font = '12px Arial'; // Adjust font size and style as needed
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(i, ball.x, ball.y);
+    i++;
+    })
+    */
+}
+
+saved_time = undefined;
+
+fps = 0;
+let solver_iters = 0;
+
+function mini_update(dt) {
+    let colls = 0;
+    let t1 = new Date().getTime();
+    //
+    let t2 = new Date().getTime();
+    //alert ((t2-t1) / 100);
+    balls.forEach( ball =>  {
+	colls += ball.update(dt, balls_discrete);
+    });
+    return colls;
+}
+
+let max_speed = 0;
+let max_radius = 0;
+let avg_collision_computes = 0;
+let balls_discrete = [];
+
+function update_max_radius () {
+    max_radius = 0;
+    total_energy = 0;
+    max_speed = 0;
+    avg_collision_computes = 0;
+    
+    balls.forEach ( ball => {
+	if (ball.radius > max_radius)
+	    max_radius = ball.radius;
+	if (ball.speed > max_speed) 
+	    max_speed = ball.speed;
+	total_energy += ball.speed**2 * ball.mass;
+	if (! ball.speed > 0)
+	    console.log (ball.speed);
+	avg_collision_computes += ball.computed_collisions;
+    });
+
+    avg_collision_computes = Math.floor(avg_collision_computes/nb_balls);
+    sort_balls2();
+}
+
+function sort_balls2() {
+    if (nb_balls == 0 || balls.length == 0)
+	return;
+    let diameter = 2*max_radius;
+    let x_size = Math.ceil(canvas.width / diameter);
+    let y_size = Math.ceil(canvas.height / diameter);
+
+    balls_discrete = Array(x_size);
+    for (let bb = 0; bb < x_size; bb++) {
+	balls_discrete[bb] = Array(y_size);
+	for (let cc = 0; cc < y_size; cc++) {
+	    balls_discrete[bb][cc] = Array();
+	}
+    }
+
+    balls.forEach(ball => {
+	let discrete_x = Math.floor(ball.x / diameter);
+	let discrete_y = Math.floor(ball.y / diameter);
+
+	if (discrete_x < x_size && discrete_y < y_size &&  balls_discrete[discrete_x]&&  balls_discrete[discrete_x][discrete_y]){
+	    balls_discrete[discrete_x][discrete_y].push(ball);
+	}
+    });
+    
+}
+
+let collision_detected = 0;
+let total_energy = 0;
+
+function update_world() {
+    collision_detected = 0;
+    update_max_radius();
+
+    
+    const currentTimeMillis = new Date().getTime();
+    ii = sub_iters;
+    if (!saved_time)
+	saved_time = currentTimeMillis
+    dt = (currentTimeMillis-saved_time)/100;
+    while (ii != 0 ){
+	collision_detected += mini_update(dt/sub_iters);
+	ii -= 1;
+    }
+    if (Math.floor(currentTimeMillis/1000) != Math.floor(saved_time/1000)) {
+	document.getElementById("debug").innerHTML = "Balls: "+nb_balls+" Gravity: "+gravity+"<br>";
+	document.getElementById("debug").innerHTML += "FPS: "+fps + " (x"+sub_iters+") FT: "+Math.floor(new Date().getTime() - currentTimeMillis)+"ms AvgColC: "+avg_collision_computes+"<br>";
+	document.getElementById("debug").innerHTML += "CollC: "+avg_collision_computes+ " CollS: "+collision_detected+ " max_s: " + Math.floor(max_speed) + "<br>";
+	document.getElementById("debug").innerHTML += "Loss: "+loss+ " Energy: "+Math.floor(total_energy);
+	fps = 0;
+    }
+    else {
+	fps +=1;
+    }
+
+    saved_time = currentTimeMillis;
+    draw();
+}
+// Start the animation loop
+
+init_balls();
+update_max_radius();
+update_world();
+update_world();
+update_world();
+setInterval(update_world, 5);
+//setInterval(shake, 500);
+
+// Resize canvas when the window is resized
+window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+});
+
+shake_factor = 10;
+
+function shake() {
+    shake_factor = -shake_factor;
+    balls.forEach(ball => {
+        // Change ball velocity based on click position
+	if (ball.y > canvas.height/2) {
+            ball.velocity.x += shake_factor;// (mouseX - ball.x) * 0.05;
+	    ball.velocity.y -= 20;
+	}
+        //ball.velocity.y = (mouseY - ball.y) * 0.05;
+    });
+}
+
+// Handle mouse click to change ball velocity
+canvas.addEventListener('click', (event) => {
+    const mouseX = event.clientX;
+    const mouseY = event.clientY;
+    console.log (mouseX);
+    console.log (mouseY);
+    balls.forEach(ball => {
+	dist = Math.sqrt((mouseX - ball.x)**2 + (mouseY - ball.y)**2)
+	let ff = 50;
+	let xf = (ball.x > mouseX)?1:-1;
+	let yf = (ball.y > mouseY)?1:-1;
+	ball.velocity.x += 100/dist * ff * xf;
+	ball.velocity.y += 100/dist * ff * yf;
+	
+    });
+    //shake();
+});

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predator-Prey Simulation</title>
+    <style>
+      canvas {
+        border: 1px solid black;
+      }
+      #chart-container {
+          width: 80%;
+          max-width: 500px;
+          max-height: 300px;
+          margin: 20px auto;
+      }
+
+    </style>
+  </head>
+  <body>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <canvas id="canvas" ></canvas>
+    
+    <button id="start">Start</button>
+    <button id="pause">Pause</button>
+    <button id="reset">Reset</button>
+    <button id="preds">Predators</button>
+    <button id="preys">Preys</button>
+    
+    <!-- <div id="chart-container">     -->
+    <!--   <canvas id="population-chart"></canvas> -->
+    <!--   <canvas id="speed-chart"></canvas> -->
+    <!-- </div> -->
+    <script src="simulation.js"></script>
+
+  </body>
+</html>
