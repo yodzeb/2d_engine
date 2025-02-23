@@ -117,14 +117,14 @@ class ball {
 
             // Move the balls away from each other proportional to their radii
             const overlap = (this.radius + ball2.radius) - distance;
-            const moveRatio1 = this.radius / (this.radius + ball2.radius);
+            const moveRatio1 = this.radius  / (this.radius + ball2.radius);
             const moveRatio2 = ball2.radius / (this.radius + ball2.radius);
 
-            this.x += overlap * moveRatio1 * Math.cos(collisionAngle);
-            this.y += overlap * moveRatio1 * Math.sin(collisionAngle);
+            this.x += overlap * moveRatio1 * Math.cos(collisionAngle); // -0.01;
+            this.y += overlap * moveRatio1 * Math.sin(collisionAngle); // -0.01;
 
-            ball2.x -= overlap * moveRatio2 * Math.cos(collisionAngle);
-            ball2.y -= overlap * moveRatio2 * Math.sin(collisionAngle);
+            ball2.x -= overlap * moveRatio2 * Math.cos(collisionAngle); // +0.01;
+            ball2.y -= overlap * moveRatio2 * Math.sin(collisionAngle); // +0.01;
 
             // Calculate masses and final velocities
             const totalMass = this.mass + ball2.mass; // this.radius + ball2.radius;
@@ -149,7 +149,7 @@ class ball {
 	    const sin_phi = Math.sin(phi);
 	    
 	    
-	 // Calculate new velocities
+	    // Calculate new velocities
 	    const v1xFinal = ((v1 * v1_phi_cos * (this.mass - ball2.mass) +
 			       2 * ball2.mass * v2 * v2_phi_cos ) / totalMass)
                   * cos_phi + v1 * v1_phi_sin * cos_phi_pi2;
@@ -172,7 +172,15 @@ class ball {
 
             ball2.velocity.x = v2xFinal * elasticity;
             ball2.velocity.y = v2yFinal * elasticity;
+	    
+	    this.speed  = Math.sqrt( this.velocity.x**2 +  this.velocity.y**2);
+	    ball2.speed = Math.sqrt(ball2.velocity.x**2 + ball2.velocity.y**2);
 
+	    if (this.speed == 0 || ball2.speed == 0) {
+		console.log("no more speed");
+		console.log (this);
+		
+	    }
             return 1; // Collision occurred
 	}
 
