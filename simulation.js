@@ -1,12 +1,18 @@
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
-const width = canvas.width = window.innerWidth;
+const width = canvas.width = window.innerWidth-50;
 const height = canvas.height = window.innerHeight - 50;
 
-const predatorCount = 500;
-const preyCount = 800;
-const grassCount = 45000;
+console.log(width);
+console.log(height);
+
+// 1600 x 700 = 38000
+
+const grassCount = width * height * 38000 / (1600*700);
+const preyCount = 450 * width * height / (1600*700);
+const predatorCount = 300* width * height / (1600*700);
+console.log (grassCount);
 const preyReprodctionRate = 1;
 
 let time = 0;
@@ -130,21 +136,23 @@ class Predator {
             this.speed = Math.random()*2 + 0.1;
             this.max_health = 30;
             this.max_age = 200;
+	    this.age = Math.random()*this.max_age;
         }
         else {
             this.x = (Math.abs(parent.x + width +  (Math.random()-0.5)*offset)) % width;
             this.y = (Math.abs(parent.y + height + (Math.random()-0.5)*offset)) % height;
-            this.speed = Math.max((Math.random()/5-0.10)+parent.speed, 0.01);
+            this.speed = Math.max((Math.random()-0.50)+parent.speed, 0.01);
             this.max_health = Math.max((Math.random()-0.5)+parent.max_health, 1);
             this.max_age = parent.max_age + (Math.random()-0.5);
+	    this.age = 0;
         }        
         this.size = this.max_health/2.6;
         this.vision = 50;
         this.vx = (Math.random()-0.5) * this.speed;
 	this.vy = (Math.random()-0.5) * this.speed;
         this.health = this.max_health / 2;
-        this.age = 0;
-        this.healthDecrease = this.speed / 80 + this.max_health / 500 ;
+
+        this.healthDecrease = (this.speed**2) / 60 + this.max_health / 500 + this.max_age / 3000;
 	this.color = 'red';
 
     }
@@ -198,6 +206,7 @@ class Prey {
 	this.framesUntilNewVelocity = 60; // Change this value to control how often the prey's velocity changes
         this.health = this.max_health / 2;
         this.healthDecrease = (this.speed**2.8) / 30 + (this.eatingDistance**2) / 60 + (this.max_health**2)/500;
+	preys.push(this);
     }
     
     update(sorted_preys, limit) {
@@ -215,11 +224,12 @@ class Prey {
         let dist = 0
         if (this.health < this.max_health) {
             let x_min = Math.max(0,Math.floor(this.x / limit)-2);
-            let x_max = Math.floor(this.x / limit)+2;
+            let x_max = Math.min(Math.floor(this.x / limit)+2, sorted_preys.length);
             let y_min = Math.max(0,Math.floor(this.y / limit)-2);
-            let y_max = Math.floor(this.y / limit)+2;
-            for (var i = x_min; i<x_max && i < sorted_preys.length; i++) {
-                for (var j=y_min; j<y_max && j < sorted_preys[i].length; j++) {
+
+            for (var i = x_min; i<x_max ; i++) {
+		let y_max = Math.min(Math.floor(this.y / limit)+2, sorted_preys[i].length);
+                for (var j=y_min; j<y_max ; j++) {
                     sorted_preys[i][j].forEach((g) => {
                         dist = Math.hypot(this.x - g.x, this.y - g.y);
                         if ( dist < this.eatingDistance && grass.indexOf(g)>0) {
@@ -228,7 +238,6 @@ class Prey {
                             if (this.health > (this.max_health*3/4) && Math.random() < 0.4 ) {
                                 this.health = this.health / 4;
                                 let newPrey = new Prey(this);
-                                preys.push(newPrey);
                             }
                         }
                         else if (dist < closest){
@@ -261,7 +270,7 @@ class Prey {
 
 class Grass {
     constructor(parent) {
-        this.max_age = 400;
+        this.max_age = 200;
         this.reproduction_age = 40;
         this.offset = 800;
         if ( !parent ){
@@ -286,8 +295,8 @@ class Grass {
     draw() {
 	ctx.beginPath();
 	ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-	//ctx.fillStyle = (this.age>this.reproduction_age)?'green':'lightgreen';
-        ctx.fillStyle = (this.bonus)?'green':'lightgreen';
+	ctx.fillStyle = (this.age>this.reproduction_age)?'green':'lightgreen';
+        //ctx.fillStyle = (this.bonus)?'green':'lightgreen';
 	ctx.fill();
     }
 
@@ -317,7 +326,6 @@ function insertPred() {
 function insertPreys() {
     for (let i = 0; i < preyCount; i++) {
         let prey = new Prey(null);
-        preys.push(prey);
     }
 }
 
@@ -476,7 +484,6 @@ function reset() {
     // Create preys
     for (let i = 0; i < preyCount; i++) {
 	let prey = new Prey(Math.random() * width, Math.random() * height);
-	preys.push(prey);
     }
 }
 
