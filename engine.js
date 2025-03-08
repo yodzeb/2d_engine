@@ -228,7 +228,7 @@ update_max_radius();
 update_world();
 update_world();
 update_world();
-setInterval(update_world, 5);
+setInterval(update_world, 3);
 //setInterval(shake, 500);
 
 // Resize canvas when the window is resized
