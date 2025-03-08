@@ -35,7 +35,7 @@ document.getElementById('slider_balls').addEventListener('input', function(event
     if (sliderValue > nb_balls) {
 	for (i=nb_balls; i<sliderValue; i++) {
 	    //balls.push(new ball(i, Math.random() * canvas.width, Math.random() * canvas.height, rad,  vx, vy));
-	    balls.push(ball.get_random(i));
+	    balls.push(Ball.getRandom(i));
 	}
     }
     else if (sliderValue < nb_balls) {
@@ -62,7 +62,7 @@ function init_balls() {
 	vx = (Math.random()-0.5) * max_init_speed;
 	vy = (Math.random()-0.5) * max_init_speed;
 	rad = Math.random() * (radius_min_max[1]-radius_min_max[0]) + radius_min_max[0];
-	balls.push(ball.get_random(i));
+	balls.push(Ball.getRandom(i));
     }
     obstacles = [
 	//new LineSegment(100, 100, 800, 800),
