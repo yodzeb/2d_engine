@@ -1,228 +1,278 @@
-
 // Ball properties
-class ball {
-    static get_random(id) {
-	vx = (Math.random()-0.5) * max_init_speed;
-	vy = (Math.random()-0.5) * max_init_speed;
-	rad = Math.random() * (radius_min_max[1]-radius_min_max[0]) + radius_min_max[0];
-	return new ball(id, Math.random() * canvas.width, Math.random() * canvas.height, rad,  vx, vy);
+class Ball {
+    static getRandom(id) {
+        const vx = (Math.random() - 0.5) * max_init_speed;
+        const vy = (Math.random() - 0.5) * max_init_speed;
+        const rad = Math.random() * (radius_min_max[1] - radius_min_max[0]) + radius_min_max[0];
+        return new Ball(id, Math.random() * canvas.width, Math.random() * canvas.height, rad, vx, vy);
     }
     
     constructor(id, x, y, radius, vx, vy) {
-	this.computed_collisions = 0;
-	this.margin = 5;
-	this.id = id;
-	this.x = x;
-	this.y = y;
-	this.radius = radius;
-	this.mass = Math.PI * this.radius ** 2;
-	this.color = '#3498db';
-	this.velocity = {
-	    x: vx,
-	    y: vy
-	};
-	this.speed = Math.sqrt(this.velocity.x**2 + this.velocity.y**2);
-    };
+        this.id = id;
+        this.x = x;
+        this.y = y;
+        this.radius = radius;
+        this.mass = Math.PI * this.radius ** 2;
+        this.color = '#3498db';
+        this.velocity = { x: vx, y: vy };
+        this.updateSpeed();
+        
+        // Constants for optimization
+        this.margin = 5;
+        this.computedCollisions = 0;
+        this.seenCollisions = 0;
+    }
 
-    collide_wall() {
-        // Check for collisions with walls
+    updateSpeed() {
+        this.speed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+    }
+
+    collideWall() {
+        let hasCollided = false;
+        
+        // Check for collisions with walls - use early returns for clearer logic
         if (this.x - this.radius < 0) {
-	    this.x = this.radius;
-	    this.velocity.x = -this.velocity.x * loss;
+            this.x = this.radius;
+            this.velocity.x = -this.velocity.x * loss;
+            hasCollided = true;
+        } else if (this.x + this.radius > canvas.width) {
+            this.x = canvas.width - this.radius;
+            this.velocity.x = -this.velocity.x * loss;
+            hasCollided = true;
         }
-	if ( this.x + this.radius > canvas.width) {
-	    this.x = canvas.width - this.radius;
-	    this.velocity.x = -this.velocity.x * loss;
-	}
-	if (this.y - this.radius < 0) {
-	    this.velocity.y = -this.velocity.y * loss;
-	    this.y = /*-this.y */ this.radius;
-	}
-        if ( this.y + this.radius > canvas.height) {
-	    this.velocity.y = -this.velocity.y * loss;
-	    this.y = canvas.height - this.radius; 
+        
+        if (this.y - this.radius < 0) {
+            this.y = this.radius;
+            this.velocity.y = -this.velocity.y * loss;
+            hasCollided = true;
+        } else if (this.y + this.radius > canvas.height) {
+            this.y = canvas.height - this.radius;
+            this.velocity.y = -this.velocity.y * loss;
+            hasCollided = true;
         }
+        
+        // Only update speed if there was a collision
+        if (hasCollided) {
+            this.updateSpeed();
+        }
+        
+        return hasCollided;
     }
 
-    update(dt, balls_discrete) {
-        // Update ball position based on velocity
-	this.velocity.y += gravity * dt;
-        this.x += this.velocity.x  * dt;
-        this.y += this.velocity.y  * dt;
-	//this.collide_segments();
-	if (fans_speed > 0)
-	    this.apply_fans(fans_speed, dt);
-	this.speed = Math.sqrt(this.velocity.x**2 + this.velocity.y**2);
-	let colls = this.collide_others_discrete(balls_discrete);
-	this.collide_wall();
-	return colls;
+    update(dt, ballsDiscrete) {
+        // Apply gravity
+        this.velocity.y += gravity * dt;
+        
+        // Update position
+        this.x += this.velocity.x * dt;
+        this.y += this.velocity.y * dt;
+        
+        // Apply fans if enabled
+        if (fans_speed > 0) {
+            this.applyFans(fans_speed, dt);
+        }
+        
+        // Handle collisions and update speed only if needed
+        const ballCollisions = this.collideOthersDiscrete(ballsDiscrete);
+        const wallCollision = this.collideWall();
+        
+        if (ballCollisions > 0 || wallCollision || fans_speed > 0) {
+            this.updateSpeed();
+        }
+        
+        return ballCollisions;
     }
 
-    collide_others_discrete(balls_discrete) {
-	if (balls_discrete.length == 0)
-	    return;
-	this.computed_collisions = 0;
-	this.seen_collisions = 0;
-	let discrete_x = Math.floor(this.x / (2*max_radius));
-	let discrete_y = Math.floor(this.y / (2*max_radius));
-	let end_x = Math.min(discrete_x+2, balls_discrete.length);
-	let end_y = Math.min(discrete_y+2, balls_discrete[0].length);
-	
-	for (let start_x = Math.max(0,discrete_x-1); start_x < end_x; start_x++) {
-	    for (let start_y = Math.max(0,discrete_y-1); start_y < end_y ; start_y++) {
-		balls_discrete[start_x][start_y].forEach(ball2 => {
-		    if (ball2.id  != this.id) {
-			this.computed_collisions ++;
-			this.seen_collisions += this.collide(ball2);
-		    }
-		});
-	    }
-	}
-	return this.seen_collisions;
+    collideOthersDiscrete(ballsDiscrete) {
+        if (!ballsDiscrete || ballsDiscrete.length === 0) {
+            return 0;
+        }
+        
+        this.computedCollisions = 0;
+        this.seenCollisions = 0;
+        
+        // Calculate grid cell indices
+        const discreteX = Math.floor(this.x / (2 * max_radius));
+        const discreteY = Math.floor(this.y / (2 * max_radius));
+        
+        // Check neighboring cells efficiently with bounds checking
+        const startX = Math.max(0, discreteX - 1);
+        const startY = Math.max(0, discreteY - 1);
+        const endX = Math.min(discreteX + 2, ballsDiscrete.length);
+        const endY = Math.min(discreteY + 2, ballsDiscrete[0]?.length || 0);
+        
+        // Check for collisions with balls in nearby cells
+        for (let x = startX; x < endX; x++) {
+            for (let y = startY; y < endY; y++) {
+                if (ballsDiscrete[x] && ballsDiscrete[x][y]) {
+                    for (const ball2 of ballsDiscrete[x][y]) {
+                        if (ball2.id !== this.id) {
+                            this.computedCollisions++;
+                            this.seenCollisions += this.collide(ball2);
+                        }
+                    }
+                }
+            }
+        }
+        
+        return this.seenCollisions;
     }
 
-    apply_fans(accell, dt) {
-	let m_margin = 10;
-	// NE
-	if (this.x > (canvas.width/2 +m_margin) && this.y < (canvas.height/2 - m_margin)) {
-	    this.velocity.x -= 8*accell*dt / this.mass;
-	}
-	// NW
-	if (this.x < (canvas.width/2 -m_margin) && this.y < (canvas.height/2 -m_margin)) {
-	    this.velocity.y += 8*accell*dt / this.mass;
-	}
-	// SW
-	if (this.x < (canvas.width/2 -m_margin) && this.y > (canvas.height/2 + m_margin )) {
-	    this.velocity.x += 8*accell*dt / this.mass;
-	}
-	// SE
-	if (this.x > (canvas.width/2+ m_margin) && this.y > (canvas.height/2 + m_margin)) {
-	    this.velocity.y -= 8*accell*dt / this.mass;
-	}
-
+    applyFans(accel, dt) {
+        const mMargin = 10;
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const force = 8 * accel * dt / this.mass;
+        
+        // Apply forces based on quadrant (NE, NW, SW, SE)
+        if (this.x > (centerX + mMargin)) {
+            if (this.y < (centerY - mMargin)) {
+                // NE quadrant
+                this.velocity.x -= force;
+            } else if (this.y > (centerY + mMargin)) {
+                // SE quadrant
+                this.velocity.y -= force;
+            }
+        } else if (this.x < (centerX - mMargin)) {
+            if (this.y < (centerY - mMargin)) {
+                // NW quadrant
+                this.velocity.y += force;
+            } else if (this.y > (centerY + mMargin)) {
+                // SW quadrant
+                this.velocity.x += force;
+            }
+        }
     }
 
     collide(ball2, elasticity = loss) {
-	// Calculate the distance between the centers of the two balls
-	const dx = this.x - ball2.x;
-	const dy = this.y - ball2.y;
-	const distance = Math.sqrt(dx**2 + dy**2);
-
-	// Check if the distance is less than the sum of their radii
-	if (distance < this.radius + ball2.radius) {
-            // Collision has occurred
-
-            // Calculate the direction of the collision
-            const collisionAngle = Math.atan2(dy, dx);
-
-            // Move the balls away from each other proportional to their radii
-            const overlap = (this.radius + ball2.radius) - distance;
-            const moveRatio1 = this.radius  / (this.radius + ball2.radius);
-            const moveRatio2 = ball2.radius / (this.radius + ball2.radius);
-
-            this.x += overlap * moveRatio1 * Math.cos(collisionAngle); // -0.01;
-            this.y += overlap * moveRatio1 * Math.sin(collisionAngle); // -0.01;
-
-            ball2.x -= overlap * moveRatio2 * Math.cos(collisionAngle); // +0.01;
-            ball2.y -= overlap * moveRatio2 * Math.sin(collisionAngle); // +0.01;
-
-            // Calculate masses and final velocities
-            const totalMass = this.mass + ball2.mass; // this.radius + ball2.radius;
-            const phi = collisionAngle; // Contact angle
-
-            const v1 = this.speed; //Math.sqrt(this.velocity.x**2 + this.velocity.y**2);
-            const v1Angle = Math.atan2(this.velocity.y, this.velocity.x);
-
-            const v2 = ball2.speed; //Math.sqrt(ball2.velocity.x**2 + ball2.velocity.y**2);
-            const v2Angle = Math.atan2(ball2.velocity.y, ball2.velocity.x);
-
-	    const pi = Math.PI;
-	    const v1_phi_cos = Math.cos(v1Angle - phi);
-	    const v2_phi_cos = Math.cos(v2Angle - phi);
-	    const v1_phi_sin = Math.sin(v1Angle - phi);
-	    const v2_phi_sin = Math.sin(v2Angle - phi);
-	    
-	    const cos_phi_pi2 = Math.cos(phi + pi/2);
-	    const sin_phi_pi2 = Math.sin(phi + pi/2);
-
-	    const cos_phi = Math.cos(phi);
-	    const sin_phi = Math.sin(phi);
-	    
-	    
-	    // Calculate new velocities
-	    const v1xFinal = ((v1 * v1_phi_cos * (this.mass - ball2.mass) +
-			       2 * ball2.mass * v2 * v2_phi_cos ) / totalMass)
-                  * cos_phi + v1 * v1_phi_sin * cos_phi_pi2;
-	    
-	    const v1yFinal = ((v1 * v1_phi_cos * (this.mass - ball2.mass) +
-			       2 * ball2.mass * v2 * v2_phi_cos) / totalMass)
-                  * sin_phi + v1 * v1_phi_sin * sin_phi_pi2;
-	    
-	    const v2xFinal = ((v2 * v2_phi_cos * (ball2.mass - this.mass) +
-			       2 * this.mass * v1 * v1_phi_cos ) / totalMass)
-                  * cos_phi + v2 * v2_phi_sin * cos_phi_pi2;
-	    
-	    const v2yFinal = ((v2 * v2_phi_cos * (ball2.mass - this.mass) +
-			       2 * this.mass * v1 * v1_phi_cos ) / totalMass)
-		  * sin_phi + v2 * v2_phi_sin * sin_phi_pi2;
-
-            // Update velocities with elasticity
-            this.velocity.x = v1xFinal * elasticity;
-            this.velocity.y = v1yFinal * elasticity;
-
-            ball2.velocity.x = v2xFinal * elasticity;
-            ball2.velocity.y = v2yFinal * elasticity;
-	    
-	    this.speed  = Math.sqrt( this.velocity.x**2 +  this.velocity.y**2);
-	    ball2.speed = Math.sqrt(ball2.velocity.x**2 + ball2.velocity.y**2);
-
-	    if (this.speed == 0 || ball2.speed == 0) {
-		console.log("no more speed");
-		console.log (this);
-		
-	    }
-            return 1; // Collision occurred
-	}
-
-	return 0; // No collision
+        // Calculate distance between centers - using squared distance for efficiency
+        const dx = this.x - ball2.x;
+        const dy = this.y - ball2.y;
+        const distanceSquared = dx * dx + dy * dy;
+        const minDistance = this.radius + ball2.radius;
+        
+        // Early out if no collision (using squared comparison to avoid square root)
+        if (distanceSquared >= minDistance * minDistance) {
+            return 0;
+        }
+        
+        // Calculate actual distance for collision response
+        const distance = Math.sqrt(distanceSquared);
+        
+        // Calculate collision normal
+        const nx = dx / distance;
+        const ny = dy / distance;
+        
+        // Resolve overlap
+        const overlap = minDistance - distance;
+        const massTotal = this.mass + ball2.mass;
+        const moveRatio1 = this.mass / massTotal;
+        const moveRatio2 = ball2.mass / massTotal;
+        
+        // Move balls apart to prevent sticking
+        const moveX = overlap * nx;
+        const moveY = overlap * ny;
+        
+        ball2.x -= moveX * moveRatio1;
+        ball2.y -= moveY * moveRatio1;
+        this.x += moveX * moveRatio2;
+        this.y += moveY * moveRatio2;
+        
+        // Calculate relative velocity along the normal
+        const velRelativeX = this.velocity.x - ball2.velocity.x;
+        const velRelativeY = this.velocity.y - ball2.velocity.y;
+        
+        // Calculate impulse scalar (simplified physics formula)
+        const impulseScalar = -(1 + elasticity) * (velRelativeX * nx + velRelativeY * ny) / 
+                             ((1 / this.mass) + (1 / ball2.mass));
+        
+        // Apply impulse to both balls
+        const impulseX = impulseScalar * nx;
+        const impulseY = impulseScalar * ny;
+        
+        this.velocity.x += impulseX / this.mass;
+        this.velocity.y += impulseY / this.mass;
+        ball2.velocity.x -= impulseX / ball2.mass;
+        ball2.velocity.y -= impulseY / ball2.mass;
+        
+        // Update speeds after collision
+        this.updateSpeed();
+        ball2.updateSpeed();
+        
+        return 1; // Collision occurred
     }
     
-    collide_segments() {
-	obstacles.forEach(obstacle => {
-	    const collisionPoint = this.isCollision(obstacle);
-	    if (collisionPoint) {
-		// Resolve collision
-		const normalX = this.x - collisionPoint.x;
-		const normalY = this.y - collisionPoint.y;
-		const length = Math.sqrt(normalX ** 2 + normalY ** 2);
-		const normal = { x: normalX / length, y: normalY / length };
-		
-		// Reflect the velocity vector based on the collision normal
-		const dotProduct = this.velocity.x * normal.x + this.velocity.y * normal.y;
-		this.velocity.x -= 2 * dotProduct * normal.x;
-		this.velocity.y -= 2 * dotProduct * normal.y;
-	    }
-	});
+    collideSegments() {
+        for (const obstacle of obstacles) {
+            const collisionPoint = this.checkSegmentCollision(obstacle);
+            if (collisionPoint) {
+                // Calculate collision normal
+                const normalX = this.x - collisionPoint.x;
+                const normalY = this.y - collisionPoint.y;
+                const normalLength = Math.sqrt(normalX ** 2 + normalY ** 2);
+                
+                // Normalize the vector
+                const nx = normalX / normalLength;
+                const ny = normalY / normalLength;
+                
+                // Calculate reflection
+                const dotProduct = 2 * (this.velocity.x * nx + this.velocity.y * ny);
+                this.velocity.x -= dotProduct * nx;
+                this.velocity.y -= dotProduct * ny;
+                
+                // Update speed after reflection
+                this.updateSpeed();
+                
+                // Move ball out of obstacle to prevent sticking
+                const penetration = this.radius - normalLength;
+                if (penetration > 0) {
+                    this.x += nx * penetration;
+                    this.y += ny * penetration;
+                }
+            }
+        }
     }
     
-    isCollision(lineSegment) {
-	const dx = lineSegment.end.x - lineSegment.start.x;
-	const dy = lineSegment.end.y - lineSegment.start.y;
-	const lengthSquared = dx * dx + dy * dy;
-
-	const fromStartToBall = {
-	    x: this.x - lineSegment.start.x,
-	    y: this.y - lineSegment.start.y
-	};
-
-	const dotProduct = (fromStartToBall.x * dx + fromStartToBall.y * dy) / lengthSquared;
-	const closestX = lineSegment.start.x + dotProduct * dx;
-	const closestY = lineSegment.start.y + dotProduct * dy;
-
-	const onSegment = dotProduct >= 0 && dotProduct <= 2;
-	const distanceSquared = (this.x - closestX) ** 2 + (this.y - closestY) ** 2;
-	const collision = onSegment && distanceSquared <= this.radius ** 2;
-
-	return collision ? { x: closestX, y: closestY } : null;
+    checkSegmentCollision(lineSegment) {
+        // Get line segment vector
+        const segVecX = lineSegment.end.x - lineSegment.start.x;
+        const segVecY = lineSegment.end.y - lineSegment.start.y;
+        const segLengthSquared = segVecX ** 2 + segVecY ** 2;
+        
+        if (segLengthSquared === 0) return null; // Avoid division by zero for point segments
+        
+        // Vector from segment start to ball center
+        const ballVecX = this.x - lineSegment.start.x;
+        const ballVecY = this.y - lineSegment.start.y;
+        
+        // Project ball position onto line segment
+        const dotProduct = (ballVecX * segVecX + ballVecY * segVecY) / segLengthSquared;
+        
+        // Find closest point on segment
+        let closestX, closestY;
+        
+        if (dotProduct < 0) {
+            // Closest to start point
+            closestX = lineSegment.start.x;
+            closestY = lineSegment.start.y;
+        } else if (dotProduct > 1) {
+            // Closest to end point
+            closestX = lineSegment.end.x;
+            closestY = lineSegment.end.y;
+        } else {
+            // Closest to point on segment
+            closestX = lineSegment.start.x + dotProduct * segVecX;
+            closestY = lineSegment.start.y + dotProduct * segVecY;
+        }
+        
+        // Calculate distance to closest point (squared)
+        const distanceSquared = (this.x - closestX) ** 2 + (this.y - closestY) ** 2;
+        
+        // Check collision using squared distance
+        if (distanceSquared <= this.radius ** 2) {
+            return { x: closestX, y: closestY };
+        }
+        
+        return null; // No collision
     }
-};
+}
