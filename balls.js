@@ -61,7 +61,7 @@ class Ball {
 
     update(dt, ballsDiscrete) {
         // Apply gravity
-        this.velocity.y += gravity * dt;
+	this.velocity.y += gravity * dt;
         
         // Update position
         this.x += this.velocity.x * dt;
@@ -75,6 +75,7 @@ class Ball {
         // Handle collisions and update speed only if needed
         const ballCollisions = this.collideOthersDiscrete(ballsDiscrete);
         const wallCollision = this.collideWall();
+	//const segCollisions = this.collideSegments();
         
         if (ballCollisions > 0 || wallCollision || fans_speed > 0) {
             this.updateSpeed();
@@ -89,7 +90,6 @@ class Ball {
         }
         
         this.computedCollisions = 0;
-        this.seenCollisions = 0;
         
         // Calculate grid cell indices
         const discreteX = Math.floor(this.x / (2 * max_radius));
@@ -108,7 +108,7 @@ class Ball {
                     for (const ball2 of ballsDiscrete[x][y]) {
                         if (ball2.id !== this.id) {
                             this.computedCollisions++;
-                            this.seenCollisions += this.collide(ball2);
+                            this.collide(ball2);
                         }
                     }
                 }
@@ -198,7 +198,10 @@ class Ball {
         // Update speeds after collision
         this.updateSpeed();
         ball2.updateSpeed();
-        
+
+	this.seenCollisions += 1;
+	ball2.seenCollisions += 1;
+	
         return 1; // Collision occurred
     }
     

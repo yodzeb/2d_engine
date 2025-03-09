@@ -9,7 +9,7 @@ console.log(height);
 
 // 1600 x 700 = 38000
 
-const grassCount = width * height * 38000 / (1600*700);
+const grassCount = width * height * 55000 / (1600*700);
 const preyCount = 450 * width * height / (1600*700);
 const predatorCount = 300* width * height / (1600*700);
 console.log (grassCount);
@@ -156,7 +156,7 @@ class Predator {
 	this.color = 'red';
 
     }
-    update() {
+    update(sorted_preys, limit) {
 	this.x = (this.x + this.vx + width) % width;
 	this.y = (this.y + this.vy + height) % height;
         this.age += 1;
@@ -165,6 +165,57 @@ class Predator {
         if (this.health <= 0 ||  this.age > this.max_age) {
             predators.splice(predators.indexOf(this), 1);
         }
+
+	sum_p+=this.max_age;
+        let found_next = false;
+        if (this.health > (this.max_health *(3/4)) ) {
+            // Create a new predator with slightly different position that is randomly chosen
+            let newPredator = new Predator(this);
+            predators.push(newPredator);
+            this.health  = this.health / 5;
+        }
+
+        var has_eaten = false
+        var closest_dist = 800;
+        var closest = null;
+        if (this.health < this.max_health) {
+            let x_min = Math.max(0,Math.floor(this.x / limit)-2);
+            let x_max = Math.floor(this.x / limit)+2;
+            let y_min = Math.max(0,Math.floor(this.y / limit)-2);
+            let y_max = Math.floor(this.y / limit)+2;
+            for (var i = x_min; i<x_max && i < sorted_preys.length; i++) {
+                for (var j=y_min; j<y_max && j < sorted_preys[i].length; j++) {
+                    sorted_preys[i][j].forEach((prey) => {
+                        var dist = Math.hypot(prey.x - this.x, prey.y - this.y);
+                        if (!has_eaten && preys.indexOf(prey)>0){
+                            var eatingDistance = prey.size + this.size;
+                            if ( dist < eatingDistance) {
+                                if( this.max_health > this.health) {
+                                    this.health += prey.health / 5;
+		                }		
+                                preys.splice(preys.indexOf(prey), 1);
+                            }
+                            else if (this.health < this.max_health && closest_dist > dist && dist < this.vision) {
+                                closest_dist = dist;
+                                closest = prey;
+                            }
+                        }
+                    });
+                }
+            }
+            if (closest) {
+                if (closest.x == this.x)
+                    this.vx = 0;
+                else
+                    this.vx = (closest.x - this.x) / Math.abs(closest.x - this.x) * this.speed;
+                if (closest.y == this.y)
+                    this.vy = 0
+                else
+                    this.vy = (closest.y - this.y) / Math.abs(closest.y - this.y) * this.speed;
+            }
+        }
+
+	
     }
 
     draw() {
@@ -203,9 +254,10 @@ class Prey {
 	this.vx = (Math.random()-0.5) * this.speed ;
 	this.vy = (Math.random()-0.5) * this.speed ;
 
-	this.framesUntilNewVelocity = 60; // Change this value to control how often the prey's velocity changes
+	//this.framesUntilNewVelocity = 60; // Change this value to control how often the prey's velocity changes
         this.health = this.max_health / 2;
         this.healthDecrease = (this.speed**2.8) / 30 + (this.eatingDistance**2) / 60 + (this.max_health**2)/500;
+	this.dist_sqr = this.eatingDistance**2;
 	preys.push(this);
     }
     
@@ -223,22 +275,23 @@ class Prey {
         this.y = (this.y + this.vy + height) % height;
         let dist = 0
         if (this.health < this.max_health) {
-            let x_min = Math.max(0,Math.floor(this.x / limit)-2);
+            let x_min = Math.max(0,Math.floor(this.x / limit)-1);
             let x_max = Math.min(Math.floor(this.x / limit)+2, sorted_preys.length);
-            let y_min = Math.max(0,Math.floor(this.y / limit)-2);
-
+            let y_min = Math.max(0,Math.floor(this.y / limit)-1);
+	    let y_max = Math.min(Math.floor(this.y / limit)+2, sorted_preys[x_min].length);
+	    var ccc = 0;
+	    var ccc_ok = 0;
+	    //console.log(this)
             for (var i = x_min; i<x_max ; i++) {
-		let y_max = Math.min(Math.floor(this.y / limit)+2, sorted_preys[i].length);
                 for (var j=y_min; j<y_max ; j++) {
                     sorted_preys[i][j].forEach((g) => {
-                        dist = Math.hypot(this.x - g.x, this.y - g.y);
-                        if ( dist < this.eatingDistance && grass.indexOf(g)>0) {
-                            this.health += 1.5 + g.age/40 + g.bonus;
+			//console.log(g);
+			ccc += 1
+			dist = ((this.x - g.x)**2 + (this.y - g.y)**2);
+                        if ( dist < this.dist_sqr && grass.indexOf(g)>0 && this.health < this.max_health) {
+			    ccc_ok +=1;
+                            this.health += 1.5 + g.age/30;
                             grass.splice (grass.indexOf(g), 1);
-                            if (this.health > (this.max_health*3/4) && Math.random() < 0.4 ) {
-                                this.health = this.health / 4;
-                                let newPrey = new Prey(this);
-                            }
                         }
                         else if (dist < closest){
                             closest = dist;
@@ -247,6 +300,13 @@ class Prey {
                     });
                 }
             }
+	    if (this.health > (this.max_health*3/4)  ) {
+		this.health = this.health / 3;
+                let newPrey = new Prey(this);
+            }
+	    
+	    //console.log(ccc+ "/"+ ccc_ok);
+
             if (found_grass) {
                 if (found_grass.x == this.x)
                     this.vx = 0;
@@ -263,7 +323,6 @@ class Prey {
     draw(avg) {
 	ctx.beginPath();
 	ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-	ctx.fillStyle = (this.speed>avg)?'purple':'orange';
 	ctx.fill();
     }
 }
@@ -278,7 +337,6 @@ class Grass {
             this.y = Math.random() * height;
             this.age = Math.random() * this.max_age - 50;
             this.color = 'green';
-            this.bonus = (Math.random()<0.5)?0:1;
         }
         else {
             this.age = 0;
@@ -286,7 +344,6 @@ class Grass {
             this.color='lightgreen';
             this.x = (Math.abs(parent.x + width +(Math.random()-0.5)*this.offset)) % width;
             this.y = (Math.abs(parent.y + height +(Math.random()-0.5)*this.offset)) % height;
-            this.bonus = parent.bonus;
         }
         this.size = 2;
         grass.push(this);
@@ -301,7 +358,7 @@ class Grass {
     }
 
     update() {
-        if (this.age > this.reproduction_age  && grass.length < grassCount && Math.random() < 0.3) {
+        if (this.age > this.reproduction_age  && grass.length < grassCount && Math.random() < 0.4) {
             let g = new Grass(this);
         }
         this.age +=1;
@@ -340,9 +397,12 @@ for (let i = 0; i < 25000; i++) {
 // Draw predators and preys
 function draw(prey_avg) {
     ctx.clearRect(0, 0, width, height);
+
     grass.forEach((g) => {
         g.draw();
     });
+	
+    ctx.fillStyle = 'orange';
     preys.forEach((prey) => {
 	prey.draw(prey_avg);
     });
@@ -368,15 +428,17 @@ function sort_preys( limit, source ) {
 
 draw();
 
+var seen_end = false;
 // Update predators and preys
 function update() {
     time++;
-    if (preys.length == 0){
+    if ((preys.length == 0 || predators.length == 0) && !seen_end){
         alert(time);
         pause();
-        }
+	seen_end = true;
+    }
 
-    let limit = 10;
+    let limit = 5;
     let sorted_grass = sort_preys(limit, grass);
     let avg = avg_speed = 0;
     let avg_mh_prey = 0;
@@ -396,55 +458,7 @@ function update() {
     sum_size = predators.length;
     // Check for prey collision with predators
     predators.forEach((predator) => {
-        predator.update()
-        sum_p+=predator.max_age;
-        found_next = false;
-        if (predator.health > (predator.max_health *(3/4)) ) {
-            // Create a new predator with slightly different position that is randomly chosen
-            let newPredator = new Predator(predator);
-            predators.push(newPredator);
-            predator.health  = predator.health / 5;
-        }
-
-        var has_eaten = false
-        closest_dist = 800;
-        closest = null;
-        if (predator.health < predator.max_health) {
-            let x_min = Math.max(0,Math.floor(predator.x / limit)-2);
-            let x_max = Math.floor(predator.x / limit)+2;
-            let y_min = Math.max(0,Math.floor(predator.y / limit)-2);
-            let y_max = Math.floor(predator.y / limit)+2;
-            for (var i = x_min; i<x_max && i < sorted_preys.length; i++) {
-                for (var j=y_min; j<y_max && j < sorted_preys[i].length; j++) {
-                    sorted_preys[i][j].forEach((prey) => {
-                        dist = Math.hypot(prey.x - predator.x, prey.y - predator.y);
-                        if (!has_eaten && preys.indexOf(prey)>0){
-                            eatingDistance = prey.size + predator.size;
-                            if ( dist < eatingDistance) {
-                                if( predator.max_health > predator.health) {
-                                    predator.health += prey.health / 5;
-		                }		
-                                preys.splice(preys.indexOf(prey), 1);
-                            }
-                            else if (predator.health < predator.max_health && closest_dist > dist && dist < predator.vision) {
-                                closest_dist = dist;
-                                closest = prey;
-                            }
-                        }
-                    });
-                }
-            }
-            if (closest) {
-                if (closest.x == predator.x)
-                    predator.vx = 0;
-                else
-                    predator.vx = (closest.x - predator.x) / Math.abs(closest.x - predator.x) * predator.speed;
-                if (closest.y == predator.y)
-                    predator.vy = 0
-                else
-                    predator.vy = (closest.y - predator.y) / Math.abs(closest.y - predator.y) * predator.speed;
-            }
-        }
+        predator.update(sorted_preys, limit)
     });
     //updateChart(avg_speed / prey_size, sum_p/sum_size);
     //console.log("avg: "+sum_p/sum_size);

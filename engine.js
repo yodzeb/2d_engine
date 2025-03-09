@@ -94,7 +94,8 @@ function draw() {
       ctx.stroke();
       ctx.closePath();
       });
-    */
+
+      */
     balls.forEach(ball => {
         // Draw ball
         ctx.beginPath();
@@ -103,11 +104,13 @@ function draw() {
 	val = Math.floor((ball.speed/max_speed) * 255);      // Speed
 	val = Math.floor(((ball.radius) / max_radius)*255);  // Size
 	val = Math.floor((ball.id/nb_balls)*255);            // ID
-	val = (ball.seen_collisions > 0 )?255:0;              // Collision
+	val = (ball.seenCollisions > 0 )?255:0;              // Collision
+	console.log(ball.seenCollisions);
         ctx.fillStyle = '#'+toHex(val)+'AAAA';//ball.color;
 	//ctx.fillStyle = "#008888";
         ctx.fill();
         ctx.closePath();
+	ball.seenCollisions = 0;
     });
     /*
     //return; 
