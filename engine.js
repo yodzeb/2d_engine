@@ -5,7 +5,7 @@ let loss = 0.98;
 balls = [];
 obstacles = [];
 fans_speed = 0;
-nb_balls = 50;//800; // 10FPS
+nb_balls = 800; // 10FPS
 max_init_speed = 100;
 sub_iters = 10;
 radius_min_max = [ 2,4 ];
@@ -35,7 +35,7 @@ document.getElementById('slider_balls').addEventListener('input', function(event
     if (sliderValue > nb_balls) {
 	for (i=nb_balls; i<sliderValue; i++) {
 	    //balls.push(new ball(i, Math.random() * canvas.width, Math.random() * canvas.height, rad,  vx, vy));
-	    balls.push(ball.get_random(i));
+	    balls.push(Ball.getRandom(i));
 	}
     }
     else if (sliderValue < nb_balls) {
@@ -62,7 +62,7 @@ function init_balls() {
 	vx = (Math.random()-0.5) * max_init_speed;
 	vy = (Math.random()-0.5) * max_init_speed;
 	rad = Math.random() * (radius_min_max[1]-radius_min_max[0]) + radius_min_max[0];
-	balls.push(ball.get_random(i));
+	balls.push(Ball.getRandom(i));
     }
     obstacles = [
 	//new LineSegment(100, 100, 800, 800),
@@ -94,7 +94,8 @@ function draw() {
       ctx.stroke();
       ctx.closePath();
       });
-    */
+
+      */
     balls.forEach(ball => {
         // Draw ball
         ctx.beginPath();
@@ -103,11 +104,13 @@ function draw() {
 	val = Math.floor((ball.speed/max_speed) * 255);      // Speed
 	val = Math.floor(((ball.radius) / max_radius)*255);  // Size
 	val = Math.floor((ball.id/nb_balls)*255);            // ID
-	val = (ball.seen_collisions > 0 )?255:0;              // Collision
+	val = (ball.seenCollisions > 0 )?255:0;              // Collision
+	console.log(ball.seenCollisions);
         ctx.fillStyle = '#'+toHex(val)+'AAAA';//ball.color;
 	//ctx.fillStyle = "#008888";
         ctx.fill();
         ctx.closePath();
+	ball.seenCollisions = 0;
     });
     /*
     //return; 
@@ -228,7 +231,7 @@ update_max_radius();
 update_world();
 update_world();
 update_world();
-setInterval(update_world, 5);
+setInterval(update_world, 3);
 //setInterval(shake, 500);
 
 // Resize canvas when the window is resized
